@@ -1,11 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {createClient} from 'redis';
+import { createClient } from 'redis';
 import 'dotenv/config';
 import makePlaygReq from "./util/makePlaygReq.js";
 import { ZipResponse, zipToolConfig } from "./tools/getZipData.js";
 import crypto from 'crypto';
 import { layerToolConfig, MultipleLayersResponse, SingleLayerResponse } from "./tools/getLayers.js";
+import { getOsmQueryConfig, MultipleOsmQueriesResponse, OsmRunQueryResponse, runOsmConfig, SingleOsmQueryResponse } from "./tools/osmQueryTools.js";
 
 const playgBaseUrl = process.env.PLAYG_API_BASE ?? '';
 const redisUrl = process.env.REDIS_URL
@@ -134,6 +135,99 @@ server.registerTool(
         content: [
           {
             type: "text",
+            text: JSON.stringify(err.message)
+          }
+        ]
+      }
+    }
+  }
+);
+
+// Tool for running an osm query
+server.registerTool(
+  'run_osm_query',
+  runOsmConfig,
+  async ({ queryId, parameters, amenities }) => {
+    try {
+      const osmURL = `${playgBaseUrl}/api/queries/${queryId}/run`;
+      const osmData = await makePlaygReq<OsmRunQueryResponse>('POST', osmURL, { parameters, amenities });
+
+      const { data } = osmData;
+      const keyName = `osm_data:${crypto.randomUUID()}`;
+      await redisClient.set(keyName, JSON.stringify(data));
+      const osmJsonUri = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: osmJsonUri
+          }
+        ]
+      }
+
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(err.message)
+          }
+        ]
+      }
+    }
+  }
+);
+
+// Tool for fetching all available osm queries/single osm query using query id
+server.registerTool(
+  'get_osm_query',
+  getOsmQueryConfig,
+  async ({ queryId }) => {
+
+    let osmURL = `${playgBaseUrl}/api/queries`
+    let osmData; 
+
+    try {
+      
+      if (queryId) {
+        osmURL = `${osmURL}/${queryId}`;
+        osmData = await makePlaygReq<SingleOsmQueryResponse>('GET', osmURL);
+      } else {
+        osmData = await makePlaygReq<MultipleOsmQueriesResponse>('GET', osmURL);
+        
+        if (!osmData.data.length) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Empty response: No queries were found'
+              }
+            ]
+          };
+        }
+      }
+
+      const { data } = osmData;
+      const keyName = `fetched_osm_queries:${crypto.randomUUID()}`;
+      await redisClient.set(keyName, JSON.stringify(data));
+      const fetchedOsmQsUri = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: fetchedOsmQsUri
+          }
+        ]
+      }
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
             text: JSON.stringify(err.message)
           }
         ]
