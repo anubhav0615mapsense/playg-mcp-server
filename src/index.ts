@@ -7,9 +7,16 @@ import { ZipResponse, zipToolConfig } from "./tools/getZipData.js";
 import crypto from 'crypto';
 import { layerToolConfig, MultipleLayersResponse, SingleLayerResponse } from "./tools/getLayers.js";
 import { getOsmQueryConfig, MultipleOsmQueriesResponse, OsmRunQueryResponse, runOsmConfig, SingleOsmQueryResponse } from "./tools/osmQueryTools.js";
+import { DuckDBInstance } from '@duckdb/node-api';
+import { duckDBToolConfig } from "./tools/duckDBQueries.js";
+import { writeFile } from "fs/promises";
 
 const playgBaseUrl = process.env.PLAYG_API_BASE ?? '';
-const redisUrl = process.env.REDIS_URL
+const redisUrl = process.env.REDIS_URL;
+const instancePath = process.env.INSTANCE_PATH;
+const filePath = process.env.FILE_PATH;
+
+const instance = await DuckDBInstance.create(instancePath);
 
 const redisClient = createClient({
   url: redisUrl
@@ -235,6 +242,54 @@ server.registerTool(
     }
   }
 );
+
+// Tool for running DuckDB queries
+server.registerTool(
+  "run_duck_db_queries",
+  duckDBToolConfig,
+  async ( { queryText, saveAsJSON, fileNameJSON } ) => {
+    try {
+      const connection = await instance.connect();
+      let responseURL;
+
+      if (saveAsJSON === true && !filePath) throw new Error("File path needs to be specified to save query responses")
+      if (saveAsJSON === true && !fileNameJSON) throw new Error("File name needs to be provided to save query responses")
+
+      const result = await connection.run(queryText);
+      const data = await result.getRowObjectsJson();
+
+      if (saveAsJSON === true) {
+        await writeFile(`${filePath}/${fileNameJSON}.json`, JSON.stringify(data, null, 2), 'utf8');
+      } else {
+        const keyName = `duckdb_query_resp:${crypto.randomUUID()}`;
+        await redisClient.set(keyName, JSON.stringify(data, null, 2));
+        responseURL = ` Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Query/Queries executed successfully.${responseURL? responseURL: ''}`
+          }
+        ]
+      };
+    } catch (err: any) {
+      if (err.message === 'Invalid string length') {
+        err.message = 'Query response size limit exceeded'
+      }
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: err.message
+          }
+        ]
+      }
+    }
+  }
+)
 
 redisClient.on('error', (err) => {
   console.error('Redis Client Error', err);
