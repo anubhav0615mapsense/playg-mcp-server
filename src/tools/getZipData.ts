@@ -8,7 +8,7 @@ interface ZipData {
   region?: string;
   circle?: string;
   type?: string;
-  coordinates?: Array<number>[];
+  coordinates?: Array<number>[][];
 }
 
 export interface ZipResponse {

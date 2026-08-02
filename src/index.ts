@@ -10,6 +10,7 @@ import { getOsmQueryConfig, MultipleOsmQueriesResponse, OsmRunQueryResponse, run
 import { DuckDBInstance } from '@duckdb/node-api';
 import { duckDBToolConfig } from "./tools/duckDBQueries.js";
 import { writeFile } from "fs/promises";
+import { DistrictDataResp, districtToolCfg } from "./tools/getDistrictData.js";
 
 const playgBaseUrl = process.env.PLAYG_API_BASE ?? '';
 const redisUrl = process.env.REDIS_URL;
@@ -290,6 +291,44 @@ server.registerTool(
     }
   }
 )
+
+// Tool for fetching district boundary data
+
+server.registerTool(
+  "get_district_data",
+  districtToolCfg,
+  async ( { dtname } ) => {
+    try {
+      const districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { dtname });
+
+      const { data } = districtData;
+      const keyName = `district_data:${crypto.randomUUID()}`;
+      await redisClient.set(keyName, JSON.stringify(data));
+      const districtDataURL = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: districtDataURL
+          }
+        ]
+      }
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: err.message
+          }
+        ]
+      }
+    }
+  }
+)
+
+
 
 redisClient.on('error', (err) => {
   console.error('Redis Client Error', err);
