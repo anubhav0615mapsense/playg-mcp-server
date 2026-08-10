@@ -10,7 +10,7 @@ import { getOsmQueryConfig, MultipleOsmQueriesResponse, OsmRunQueryResponse, run
 import { DuckDBInstance } from '@duckdb/node-api';
 import { duckDBToolConfig } from "./tools/duckDBQueries.js";
 import { writeFile } from "fs/promises";
-import { DistrictDataResp, districtToolCfg } from "./tools/getDistrictData.js";
+import { DistrictDataResp, DistrictDataRespArray, districtToolCfg } from "./tools/getDistrictData.js";
 
 const playgBaseUrl = process.env.PLAYG_API_BASE ?? '';
 const redisUrl = process.env.REDIS_URL;
@@ -297,9 +297,16 @@ server.registerTool(
 server.registerTool(
   "get_district_data",
   districtToolCfg,
-  async ( { dtname } ) => {
+  async ( { multipleDtnames, dtname } ) => {
     try {
-      const districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { dtname });
+
+      let districtData;
+
+      if (multipleDtnames) {
+        districtData = await makePlaygReq<DistrictDataRespArray>('POST', `${playgBaseUrl}/api/district-boundary`, { multipleDtnames });
+      } else {
+        districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { dtname }); 
+      }
 
       const { data } = districtData;
       const keyName = `district_data:${crypto.randomUUID()}`;
