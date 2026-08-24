@@ -12,12 +12,10 @@ import { duckDBToolConfig } from "./tools/duckDBQueries.js";
 import { writeFile } from "fs/promises";
 import { DistrictDataResp, DistrictDataRespArray, districtToolCfg } from "./tools/getDistrictData.js";
 
-const playgBaseUrl = process.env.PLAYG_API_BASE ?? '';
-const redisUrl = process.env.REDIS_URL;
-const instancePath = process.env.INSTANCE_PATH;
-const filePath = process.env.FILE_PATH;
+const playgBaseUrl = process.env.PLAYG_API_BASE? process.env.PLAYG_API_BASE: '';
+const { INSTANCE_PATH: instancePath, QUACK_AUTH_TOKEN: quackAuthToken, QUACK_SERVER_URI: quackServerUri, FILE_PATH: filePath, REDIS_URL: redisUrl } = process.env;
 
-const instance = await DuckDBInstance.create(instancePath);
+const instance = await DuckDBInstance.create(instancePath? instancePath: ':memory:');
 
 const redisClient = createClient({
   url: redisUrl
@@ -248,7 +246,7 @@ server.registerTool(
 server.registerTool(
   "run_duck_db_queries",
   duckDBToolConfig,
-  async ( { queryText, saveAsJSON, fileNameJSON } ) => {
+  async ( { queryText, remoteQuery, saveAsJSON, fileNameJSON } ) => {
     try {
       const connection = await instance.connect();
       let responseURL;
@@ -256,7 +254,14 @@ server.registerTool(
       if (saveAsJSON === true && !filePath) throw new Error("File path needs to be specified to save query responses")
       if (saveAsJSON === true && !fileNameJSON) throw new Error("File name needs to be provided to save query responses")
 
-      const result = await connection.run(queryText);
+      let query = queryText;
+      if (remoteQuery === true) {
+        if(!(quackServerUri || quackAuthToken)) {
+          throw new Error("Both quack env variables need to be set to run remote queries")
+        }
+        query = `FROM quack_query("${quackServerUri}", "${queryText}", token = ${quackAuthToken});`
+      }
+      const result = await connection.run(query);
       const data = await result.getRowObjectsJson();
 
       if (saveAsJSON === true) {

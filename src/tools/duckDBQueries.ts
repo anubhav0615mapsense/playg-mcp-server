@@ -8,6 +8,11 @@ export const duckDBToolConfig = {
       .string()
       .describe('Actual query provided by the user to run'),
 
+    remoteQuery: z
+      .boolean()
+      .optional()
+      .describe('Boolean param for switching between running local and remote duckDB queries'),
+
     saveAsJSON: z
       .boolean()
       .optional()

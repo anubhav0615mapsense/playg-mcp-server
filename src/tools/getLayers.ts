@@ -34,11 +34,13 @@ export const layerToolConfig = {
   inputSchema: {
     id: z
       .string()
+      .uuid()
       .optional()
       .describe('Id of the required layer can be specified when user wants to fetch a single layer'),
 
     originalLayerId: z
       .string()
+      .uuid()
       .optional()
       .describe('Id of the layer whose related versions need to fetched')
 

@@ -1,15 +1,15 @@
 ---
 name: duckdb-spatial
-description: A reference for working with the spatial data and functions supported by DuckDB's geospatial extension. Should preferably be used when invoking the duckDBQueryTool in playg-mcp.
+description: A reference for understanding and generating SQL queries involving spatial data and functions supported by DuckDB's geospatial extension. Should always be referred to first before generating spatial queries to ensure correct usage.
 ---
 
-**Prerequisite** :  Always load the spatial extension before using any of the functions below.
+# duckdb-spatial (DuckDB Spatial Function Reference)
+
+**Note** :  Always load the spatial extension before using any of the given functions.
 
 ```
 LOAD spatial;
 ```
-
-# DuckDB Spatial Function Reference
 
 ## Function Index 
 **[Scalar Functions](#scalar-functions)**
