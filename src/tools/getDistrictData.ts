@@ -27,6 +27,11 @@ export const districtToolCfg = {
       .array(z.string())
       .optional()
       .describe('Array of district names for fetching boundary data'),
+    id: z
+      .string()
+      .uuid()
+      .optional()
+      .describe('Id of the required district whose boundary data will be fetched'),
     dtname: z
       .string()
       .optional()

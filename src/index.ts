@@ -302,13 +302,15 @@ server.registerTool(
 server.registerTool(
   "get_district_data",
   districtToolCfg,
-  async ( { multipleDtnames, dtname } ) => {
+  async ( { multipleDtnames, id, dtname } ) => {
     try {
 
       let districtData;
 
       if (multipleDtnames) {
         districtData = await makePlaygReq<DistrictDataRespArray>('POST', `${playgBaseUrl}/api/district-boundary`, { multipleDtnames });
+      } else if (id) {
+        districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { id }); 
       } else {
         districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { dtname }); 
       }
