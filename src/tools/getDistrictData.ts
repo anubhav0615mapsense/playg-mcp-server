@@ -22,13 +22,12 @@ export interface DistrictDataRespArray {
 export const districtToolCfg = {
   title: 'DistrictDataTool',
   description: 'Get district boundary data using the given district name',
-  inputSchema: {
+  inputSchema: z.object({
     multipleDtnames: z
       .array(z.string())
       .optional()
       .describe('Array of district names for fetching boundary data'),
     id: z
-      .string()
       .uuid()
       .optional()
       .describe('Id of the required district whose boundary data will be fetched'),
@@ -36,6 +35,6 @@ export const districtToolCfg = {
       .string()
       .optional()
       .describe('Name of the required district for fetching boundary data')
-  }
+  })
 }
 

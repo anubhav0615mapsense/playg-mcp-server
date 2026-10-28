@@ -3,7 +3,7 @@ import z from "zod";
 export const duckDBToolConfig = {
   title: 'duckDBQueryTool',
   description: 'Tool for running queries provided by user on duckDB',
-  inputSchema: {
+  inputSchema: z.object({
     queryText: z
       .string()
       .describe('Actual query provided by the user to run'),
@@ -22,5 +22,5 @@ export const duckDBToolConfig = {
       .string()
       .optional()
       .describe('File name for saving the query response as a JSON file')
-  }
+  })
 }
