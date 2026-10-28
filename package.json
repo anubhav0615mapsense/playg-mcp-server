@@ -6,8 +6,12 @@
   "bin": {
     "playg": "./build/index.js"
   },
+  "engines": {
+    "node": ">=24.18.0"
+  },
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\""
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "deploy": "wrangler deploy"
   },
   "files": [
     "build"
@@ -27,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.0.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.154.0"
   }
 }
