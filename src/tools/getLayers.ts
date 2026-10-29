@@ -31,18 +31,16 @@ export interface SingleLayerResponse {
 export const layerToolConfig = {
   title: 'LayersTool',
   description: 'Fetch all user layers/ a single user layer using id/ all versions of a given user layer',
-  inputSchema: {
+  inputSchema: z.object({
     id: z
-      .string()
       .uuid()
       .optional()
       .describe('Id of the required layer can be specified when user wants to fetch a single layer'),
 
     originalLayerId: z
-      .string()
       .uuid()
       .optional()
       .describe('Id of the layer whose related versions need to fetched')
 
-  }
+  })
 }
