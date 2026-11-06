@@ -11,16 +11,15 @@ export const duckDBToolConfig = {
     remoteQuery: z
       .boolean()
       .optional()
-      .describe('Boolean param for switching between running local and remote duckDB queries'),
-
-    saveAsJSON: z
-      .boolean()
-      .optional()
-      .describe('Boolean param for choosing whether to save the query response as a JSON file'),
-
-    fileNameJSON: z
-      .string()
-      .optional()
-      .describe('File name for saving the query response as a JSON file')
+      .describe('Boolean param for switching between normal and remote duckDB queries (using Quack). Can be set to true when normal queries do not work/throw errors, otherwise it can be skipped.')
   })
+}
+
+export interface ddbData {
+  message: string;
+  responseURL: string;
+}
+
+export interface ddbResponse {
+  data: ddbData;
 }

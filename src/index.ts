@@ -7,15 +7,17 @@ import { ZipResponse, zipToolConfig } from "./tools/getZipData.js";
 import crypto from 'crypto';
 import { layerToolConfig, MultipleLayersResponse, SingleLayerResponse } from "./tools/getLayers.js";
 import { getOsmQueryConfig, MultipleOsmQueriesResponse, OsmRunQueryResponse, runOsmConfig, SingleOsmQueryResponse } from "./tools/osmQueryTools.js";
-import { DuckDBInstance } from '@duckdb/node-api';
-import { duckDBToolConfig } from "./tools/duckDBQueries.js";
-import { writeFile } from "fs/promises";
+import { ddbResponse, duckDBToolConfig } from "./tools/duckDBQueries.js";
 import { DistrictDataResp, DistrictDataRespArray, districtToolCfg } from "./tools/getDistrictData.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
-const playgBaseUrl = process.env.PLAYG_API_BASE? process.env.PLAYG_API_BASE: '';
-const { INSTANCE_PATH: instancePath, QUACK_AUTH_TOKEN: quackAuthToken, QUACK_SERVER_URI: quackServerUri, FILE_PATH: filePath, REDIS_URL: redisUrl } = process.env;
+const stdioOpts = ['stdio', 'STDIO']
 
-const instance = await DuckDBInstance.create(instancePath? instancePath: ':memory:');
+const { 
+  REDIS_URL: redisUrl,
+  PLAYG_API_BASE: playgBaseUrl,
+  MCP_TYPE: mcpType
+} = process.env;
 
 const redisClient = createClient({
   url: redisUrl
@@ -247,44 +249,22 @@ function createServer() {
   server.registerTool(
     "run_duck_db_queries",
     duckDBToolConfig,
-    async ( { queryText, remoteQuery, saveAsJSON, fileNameJSON } ) => {
+    async ( { queryText, remoteQuery } ) => {
       try {
-        const connection = await instance.connect();
-        let responseURL;
+        const ddbUrl = `${playgBaseUrl}/api/duckdbq/run`
+        const redisKeyName = `duckdb_query_resp:${crypto.randomUUID()}`;
 
-        if (saveAsJSON === true && !filePath) throw new Error("File path needs to be specified to save query responses")
-        if (saveAsJSON === true && !fileNameJSON) throw new Error("File name needs to be provided to save query responses")
-
-        let query = queryText;
-        if (remoteQuery === true) {
-          if(!(quackServerUri || quackAuthToken)) {
-            throw new Error("Both quack env variables need to be set to run remote queries")
-          }
-          query = `FROM quack_query("${quackServerUri}", "${queryText}", token = ${quackAuthToken});`
-        }
-        const result = await connection.run(query);
-        const data = await result.getRowObjectsJson();
-
-        if (saveAsJSON === true) {
-          await writeFile(`${filePath}/${fileNameJSON}.json`, JSON.stringify(data, null, 2), 'utf8');
-        } else {
-          const keyName = `duckdb_query_resp:${crypto.randomUUID()}`;
-          await redisClient.set(keyName, JSON.stringify(data, null, 2));
-          responseURL = ` Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
-        }
+        const res = await makePlaygReq<ddbResponse>('POST', ddbUrl, { queryText, remoteQuery, redisKeyName })
 
         return {
           content: [
             {
               type: 'text',
-              text: `Query/Queries executed successfully.${responseURL? responseURL: ''}`
+              text: `${res.data.message}: ${res.data.responseURL}`
             }
           ]
         };
       } catch (err: any) {
-        if (err.message === 'Invalid string length') {
-          err.message = 'Query response size limit exceeded'
-        }
         return {
           isError: true,
           content: [
@@ -350,25 +330,30 @@ redisClient.on('error', (err) => {
   console.error('Redis Client Error', err);
 })
 
-const handler = createMcpHandler(createServer)
-
 async function main() {
-  handler;
-  await redisClient.connect();
-  console.log("Playg MCP server running remotely");
+  try {
+    await redisClient.connect();
+    if (mcpType && stdioOpts.includes(mcpType)) {
+      serveStdio(createServer, {
+        onerror: (error) => console.error("Playg MCP Server error:", error)
+      })
+      console.error("Playg MCP server running on stdio");
+    } else {
+      const handler = createMcpHandler(createServer)
+      console.log("Starting Playg MCP remote server");
+      return handler
+    }
+  } catch (err) {
+    redisClient.close();
+    console.error("Fatal error in main():", err);
+    process.exit(1);
+  }
 }
 
-main().catch((error) => {
-  handler.close();
-  redisClient.close();
-  console.error("Fatal error in main():", error);
-  process.exit(1);
-})
-
-export default handler;
+if (mcpType && stdioOpts.includes(mcpType)) main();
+export default main;
 
 process.on('SIGINT', async () => {
-  await handler.close()
   await redisClient.close();
   process.exit(0);
 })
