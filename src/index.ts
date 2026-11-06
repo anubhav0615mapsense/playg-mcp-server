@@ -330,19 +330,15 @@ redisClient.on('error', (err) => {
   console.error('Redis Client Error', err);
 })
 
+const handler = createMcpHandler(createServer)
+
 async function main() {
   try {
     await redisClient.connect();
-    if (mcpType && stdioOpts.includes(mcpType)) {
-      serveStdio(createServer, {
-        onerror: (error) => console.error("Playg MCP Server error:", error)
-      })
-      console.error("Playg MCP server running on stdio");
-    } else {
-      const handler = createMcpHandler(createServer)
-      console.log("Starting Playg MCP remote server");
-      return handler
-    }
+    serveStdio(createServer, {
+      onerror: (error) => console.error("Playg MCP Server error:", error)
+    })
+    console.error("Playg MCP server running on stdio");
   } catch (err) {
     redisClient.close();
     console.error("Fatal error in main():", err);
@@ -351,7 +347,8 @@ async function main() {
 }
 
 if (mcpType && stdioOpts.includes(mcpType)) main();
-export default main;
+
+export default handler;
 
 process.on('SIGINT', async () => {
   await redisClient.close();
