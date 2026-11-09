@@ -25,7 +25,6 @@
     "axios": "^1.18.1",
     "dotenv": "^17.4.2",
     "install": "^0.13.0",
-    "redis": "^6.1.0",
     "zod": "^4.2.0"
   },
   "devDependencies": {

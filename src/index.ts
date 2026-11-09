@@ -1,27 +1,24 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { McpServer } from "@modelcontextprotocol/server";
-import { createClient } from 'redis';
 import 'dotenv/config';
 import makePlaygReq from "./util/makePlaygReq.js";
-import { ZipResponse, zipToolConfig } from "./tools/getZipData.js";
+import { zipToolConfig } from "./tools/getZipData.js";
 import crypto from 'crypto';
-import { layerToolConfig, MultipleLayersResponse, SingleLayerResponse } from "./tools/getLayers.js";
-import { getOsmQueryConfig, MultipleOsmQueriesResponse, OsmRunQueryResponse, runOsmConfig, SingleOsmQueryResponse } from "./tools/osmQueryTools.js";
-import { ddbResponse, duckDBToolConfig } from "./tools/duckDBQueries.js";
-import { DistrictDataResp, DistrictDataRespArray, districtToolCfg } from "./tools/getDistrictData.js";
+import { layerToolConfig } from "./tools/getLayers.js";
+import { getOsmQueryConfig, runOsmConfig } from "./tools/osmQueryTools.js";
+import { duckDBToolConfig } from "./tools/duckDBQueries.js";
+import { districtToolCfg } from "./tools/getDistrictData.js";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { playgResponse } from "./util/playgResponse.js";
 
 const stdioOpts = ['stdio', 'STDIO']
 
-const { 
-  REDIS_URL: redisUrl,
+const {
   PLAYG_API_BASE: playgBaseUrl,
   MCP_TYPE: mcpType
 } = process.env;
 
-const redisClient = createClient({
-  url: redisUrl
-});
+const redisQParam = (key: string) => `?redisKeyName=${key}`;
 
 function createServer() {
   // Creates server instance
@@ -34,58 +31,30 @@ function createServer() {
   server.registerTool(
     "get_user_layers",
     layerToolConfig,
-    async ( { id, originalLayerId } ) => {
+    async ( { id, originalLayerId, fetchAll } ) => {
       
       try {
-        let userLayersUrl, fetchedLayersRes;
+        let userLayersUrl;
         const keyName = `layer_data:${crypto.randomUUID()}`;
-        const layerJsonUri = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
 
         // Fetches a single layer using id
         if (id) {
-          userLayersUrl = `${playgBaseUrl}/api/user-layers/${id}`
-          fetchedLayersRes = await makePlaygReq<SingleLayerResponse>('GET', userLayersUrl);
-
-          const { data } = fetchedLayersRes;
-          await redisClient.set(keyName, JSON.stringify(data, null, 2));
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: layerJsonUri
-              }
-            ]
-          };
-
+          userLayersUrl = `${playgBaseUrl}/api/user-layers/${id}${redisQParam(keyName)}`
         } else if (originalLayerId) {
-          userLayersUrl = `${playgBaseUrl}/api/user-layers/versions/${originalLayerId}`
-          fetchedLayersRes = await makePlaygReq<MultipleLayersResponse>('GET', userLayersUrl)
-
-          const { data } = fetchedLayersRes;
-          await redisClient.set(keyName, JSON.stringify(data, null, 2));
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: layerJsonUri
-              }
-            ]
-          };
+          userLayersUrl = `${playgBaseUrl}/api/user-layers/versions/${originalLayerId}${redisQParam(keyName)}`
+        } else if (fetchAll && fetchAll === true) {
+          userLayersUrl = `${playgBaseUrl}/api/user-layers/all${redisQParam(keyName)}`;
+        } else {
+          userLayersUrl = `${playgBaseUrl}/api/user-layers${redisQParam(keyName)}`;
         }
 
-        userLayersUrl = `${playgBaseUrl}/api/user-layers`;
-        fetchedLayersRes = await makePlaygReq<MultipleLayersResponse>('GET', userLayersUrl);
-
-        const { data } = fetchedLayersRes;
-        await redisClient.set(keyName, JSON.stringify(data, null, 2));
+        const res = await makePlaygReq<playgResponse>('GET', userLayersUrl);
 
         return {
           content: [
             {
               type: "text",
-              text: layerJsonUri
+              text: `${res.data.message}: ${res.data.responseURL}`
             }
           ]
         }
@@ -111,30 +80,15 @@ function createServer() {
     async ( { key, value, requiredFields } ) => {
 
       try {
-        const zipURL = `${playgBaseUrl}/api/zip-boundary`;
-        const zipData = await makePlaygReq<ZipResponse>('POST', zipURL, { key, value, requiredFields });
-
-        const { data } = zipData;
-        if (!data.length) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "No/ Empty zip boundary data returned for the given key-value pair"
-              }
-            ]
-          };
-        }
-
         const keyName = `zip_data:${crypto.randomUUID()}`;
-        await redisClient.set(keyName, JSON.stringify(data));
-        const zipJsonUri = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+        const zipURL = `${playgBaseUrl}/api/zip-boundary${redisQParam(keyName)}`;
+        const res = await makePlaygReq<playgResponse>('POST', zipURL, { key, value, requiredFields });
 
         return {
           content: [
             {
               type: "text",
-              text: zipJsonUri
+              text: `${res.data.message}: ${res.data.responseURL}`
             }
           ]
         }
@@ -158,19 +112,15 @@ function createServer() {
     runOsmConfig,
     async ({ queryId, parameters, amenities }) => {
       try {
-        const osmURL = `${playgBaseUrl}/api/queries/${queryId}/run`;
-        const osmData = await makePlaygReq<OsmRunQueryResponse>('POST', osmURL, { parameters, amenities });
-
-        const { data } = osmData;
         const keyName = `osm_data:${crypto.randomUUID()}`;
-        await redisClient.set(keyName, JSON.stringify(data));
-        const osmJsonUri = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+        const osmURL = `${playgBaseUrl}/api/queries/${queryId}/run${redisQParam(keyName)}`;
+        const res = await makePlaygReq<playgResponse>('POST', osmURL, { parameters, amenities });
 
         return {
           content: [
             {
               type: 'text',
-              text: osmJsonUri
+              text: `${res.data.message}: ${res.data.responseURL}`
             }
           ]
         }
@@ -195,39 +145,24 @@ function createServer() {
     getOsmQueryConfig,
     async ({ queryId }) => {
 
-      let osmURL = `${playgBaseUrl}/api/queries`
-      let osmData; 
+      let osmURL = `${playgBaseUrl}/api/queries`;
+      const keyName = `fetched_osm_queries:${crypto.randomUUID()}`;
 
       try {
         
         if (queryId) {
-          osmURL = `${osmURL}/${queryId}`;
-          osmData = await makePlaygReq<SingleOsmQueryResponse>('GET', osmURL);
+          osmURL = `${osmURL}/${queryId}${redisQParam(keyName)}`;
         } else {
-          osmData = await makePlaygReq<MultipleOsmQueriesResponse>('GET', osmURL);
-          
-          if (!osmData.data.length) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: 'Empty response: No queries were found'
-                }
-              ]
-            };
-          }
+          osmURL = `${osmURL}${redisQParam(keyName)}`;
         }
 
-        const { data } = osmData;
-        const keyName = `fetched_osm_queries:${crypto.randomUUID()}`;
-        await redisClient.set(keyName, JSON.stringify(data));
-        const fetchedOsmQsUri = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
+        const res = await makePlaygReq<playgResponse>('GET', osmURL);
 
         return {
           content: [
             {
               type: 'text',
-              text: fetchedOsmQsUri
+              text: `${res.data.message}: ${res.data.responseURL}`
             }
           ]
         }
@@ -254,7 +189,7 @@ function createServer() {
         const ddbUrl = `${playgBaseUrl}/api/duckdbq/run`
         const redisKeyName = `duckdb_query_resp:${crypto.randomUUID()}`;
 
-        const res = await makePlaygReq<ddbResponse>('POST', ddbUrl, { queryText, remoteQuery, redisKeyName })
+        const res = await makePlaygReq<playgResponse>('POST', ddbUrl, { queryText, remoteQuery, redisKeyName })
 
         return {
           content: [
@@ -286,26 +221,22 @@ function createServer() {
     async ( { multipleDtnames, id, dtname } ) => {
       try {
 
-        let districtData;
+        const keyName = `district_data:${crypto.randomUUID()}`;
+        let res, districtDataURL = `${playgBaseUrl}/api/district-boundary${redisQParam(keyName)}`;
 
         if (multipleDtnames) {
-          districtData = await makePlaygReq<DistrictDataRespArray>('POST', `${playgBaseUrl}/api/district-boundary`, { multipleDtnames });
+          res = await makePlaygReq<playgResponse>('POST', districtDataURL, { multipleDtnames });
         } else if (id) {
-          districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { id }); 
+          res = await makePlaygReq<playgResponse>('POST', districtDataURL, { id }); 
         } else {
-          districtData = await makePlaygReq<DistrictDataResp>('POST', `${playgBaseUrl}/api/district-boundary`, { dtname }); 
+          res = await makePlaygReq<playgResponse>('POST', districtDataURL, { dtname }); 
         }
-
-        const { data } = districtData;
-        const keyName = `district_data:${crypto.randomUUID()}`;
-        await redisClient.set(keyName, JSON.stringify(data));
-        const districtDataURL = `Response_URL: ${playgBaseUrl}/api/get-json?key=${keyName}`;
 
         return {
           content: [
             {
               type: "text",
-              text: districtDataURL
+              text: `${res.data.message}: ${res.data.responseURL}`
             }
           ]
         }
@@ -326,21 +257,15 @@ function createServer() {
   return server
 }
 
-redisClient.on('error', (err) => {
-  console.error('Redis Client Error', err);
-})
-
 const handler = createMcpHandler(createServer)
 
 async function main() {
   try {
-    await redisClient.connect();
     serveStdio(createServer, {
       onerror: (error) => console.error("Playg MCP Server error:", error)
     })
     console.error("Playg MCP server running on stdio");
   } catch (err) {
-    redisClient.close();
     console.error("Fatal error in main():", err);
     process.exit(1);
   }
@@ -351,11 +276,9 @@ if (mcpType && stdioOpts.includes(mcpType)) main();
 export default handler;
 
 process.on('SIGINT', async () => {
-  await redisClient.close();
   process.exit(0);
 })
 
 process.on('SIGTERM', async () => {
-  await redisClient.close();
   process.exit(0);
 })

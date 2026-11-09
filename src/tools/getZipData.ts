@@ -1,20 +1,5 @@
 import z from "zod";
 
-interface ZipData {
-  id?: string;
-  zipcode?: string;
-  officeName?: string;
-  division?: string;
-  region?: string;
-  circle?: string;
-  type?: string;
-  coordinates?: Array<number>[][];
-}
-
-export interface ZipResponse {
-  data: ZipData[];
-}
-
 export const zipToolConfig = {
   title: 'ZipDataTool',
   description: `Get zip boundary data using any of the following keys - ${['id', 'zipcode', 'officeName', 'division', 'region', 'circle'].join(', ')}.`,

@@ -1,30 +1,5 @@
 import z from "zod";
 
-interface OsmQuery {
-  id: string;
-  name: string;
-  description: string;
-  template: string;
-  parameters: Array<Object>
-}
-
-export interface SingleOsmQueryResponse {
-  data: OsmQuery;
-}
-
-export interface MultipleOsmQueriesResponse {
-  data: OsmQuery[];
-}
-
-interface RunOsmQueryData {
-  message: string;
-  data: Object;
-}
-
-export interface OsmRunQueryResponse {
-  data: RunOsmQueryData;
-}
-
 export const getOsmQueryConfig = {
   title: 'GetOsmQueryTool',
   description: 'The tool for fetching all available OSM queries/ or a single query (using id) in the playground application',

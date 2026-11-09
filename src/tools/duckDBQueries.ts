@@ -14,12 +14,3 @@ export const duckDBToolConfig = {
       .describe('Boolean param for switching between normal and remote duckDB queries (using Quack). Can be set to true when normal queries do not work/throw errors, otherwise it can be skipped.')
   })
 }
-
-export interface ddbData {
-  message: string;
-  responseURL: string;
-}
-
-export interface ddbResponse {
-  data: ddbData;
-}

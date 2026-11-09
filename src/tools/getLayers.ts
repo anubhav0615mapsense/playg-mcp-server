@@ -1,33 +1,5 @@
 import z from "zod";
 
-interface LayerData {
-  id: string;
-  layerName: string;
-  userId: string;
-  originalLayerId?: string;
-  versionNum: number;
-  layerData: Object;
-  fileType: string;
-  geometryType: string;
-  totalRecords: number;
-  layerSize: string;
-  createdAt: Date;
-  updatedAt: Date;
-  organization?: string;
-  organizationId: string;
-  style?: Object;
-  rampNo?: string;
-  selectedField?: string;
-}
-
-export interface MultipleLayersResponse {
-  data: LayerData[];
-}
-
-export interface SingleLayerResponse {
-  data: LayerData;
-}
-
 export const layerToolConfig = {
   title: 'LayersTool',
   description: 'Fetch all user layers/ a single user layer using id/ all versions of a given user layer',
@@ -40,7 +12,12 @@ export const layerToolConfig = {
     originalLayerId: z
       .uuid()
       .optional()
-      .describe('Id of the layer whose related versions need to fetched')
+      .describe('Id of the layer whose related versions need to fetched'),
+
+    fetchAll: z
+      .boolean()
+      .optional()
+      .describe("Boolean param that can be set to true when fetching all layers saved under the given user's organization. Fetches all saved layers regardless of org if given user is the Super Admin.")
 
   })
 }
