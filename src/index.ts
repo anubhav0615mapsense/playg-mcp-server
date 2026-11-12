@@ -10,13 +10,13 @@ import { duckDBToolConfig } from "./tools/duckDBQueries.js";
 import { districtToolCfg } from "./tools/getDistrictData.js";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { playgResponse } from "./util/playgResponse.js";
-
-const stdioOpts = ['stdio', 'STDIO']
-
+import getAuthToken from "./util/getAuthToken.js";
 const {
   PLAYG_API_BASE: playgBaseUrl,
-  MCP_TYPE: mcpType
 } = process.env;
+const mcpType = process.env.MCP_TYPE ?? 'stdio';
+const bearerToken = process.env.BEARER_TOKEN ?? '';
+const stdioOpts = ['stdio', 'STDIO']
 
 const redisQParam = (key: string) => `?redisKeyName=${key}`;
 
@@ -31,12 +31,13 @@ function createServer() {
   server.registerTool(
     "get_user_layers",
     layerToolConfig,
-    async ( { id, originalLayerId, fetchAll } ) => {
+    async ( { id, originalLayerId, fetchAll }, ctx ) => {
       
-      try {
-        let userLayersUrl;
-        const keyName = `layer_data:${crypto.randomUUID()}`;
+      const authToken = (!stdioOpts.includes(mcpType))? getAuthToken(ctx): bearerToken;
+      let userLayersUrl;
+      const keyName = `layer_data:${crypto.randomUUID()}`;
 
+      try {
         // Fetches a single layer using id
         if (id) {
           userLayersUrl = `${playgBaseUrl}/api/user-layers/${id}${redisQParam(keyName)}`
@@ -48,7 +49,7 @@ function createServer() {
           userLayersUrl = `${playgBaseUrl}/api/user-layers${redisQParam(keyName)}`;
         }
 
-        const res = await makePlaygReq<playgResponse>('GET', userLayersUrl);
+        const res = await makePlaygReq<playgResponse>('GET', userLayersUrl, authToken);
 
         return {
           content: [
@@ -77,12 +78,14 @@ function createServer() {
   server.registerTool(
     "get_zip_data",
     zipToolConfig,
-    async ( { key, value, requiredFields } ) => {
+    async ( { key, value, requiredFields }, ctx ) => {
+
+      const authToken = (!stdioOpts.includes(mcpType))? getAuthToken(ctx): bearerToken;
+      const keyName = `zip_data:${crypto.randomUUID()}`;
+      const zipURL = `${playgBaseUrl}/api/zip-boundary${redisQParam(keyName)}`;
 
       try {
-        const keyName = `zip_data:${crypto.randomUUID()}`;
-        const zipURL = `${playgBaseUrl}/api/zip-boundary${redisQParam(keyName)}`;
-        const res = await makePlaygReq<playgResponse>('POST', zipURL, { key, value, requiredFields });
+        const res = await makePlaygReq<playgResponse>('POST', zipURL, authToken, { key, value, requiredFields });
 
         return {
           content: [
@@ -110,11 +113,14 @@ function createServer() {
   server.registerTool(
     'run_osm_query',
     runOsmConfig,
-    async ({ queryId, parameters, amenities }) => {
+    async ({ queryId, parameters, amenities }, ctx) => {
+
+      const authToken = (!stdioOpts.includes(mcpType))? getAuthToken(ctx): bearerToken;
+      const keyName = `osm_data:${crypto.randomUUID()}`;
+      const osmURL = `${playgBaseUrl}/api/queries/${queryId}/run${redisQParam(keyName)}`;
+
       try {
-        const keyName = `osm_data:${crypto.randomUUID()}`;
-        const osmURL = `${playgBaseUrl}/api/queries/${queryId}/run${redisQParam(keyName)}`;
-        const res = await makePlaygReq<playgResponse>('POST', osmURL, { parameters, amenities });
+        const res = await makePlaygReq<playgResponse>('POST', osmURL, authToken, { parameters, amenities });
 
         return {
           content: [
@@ -143,8 +149,9 @@ function createServer() {
   server.registerTool(
     'get_osm_query',
     getOsmQueryConfig,
-    async ({ queryId }) => {
+    async ({ queryId }, ctx) => {
 
+      const authToken = (!stdioOpts.includes(mcpType))? getAuthToken(ctx): bearerToken;
       let osmURL = `${playgBaseUrl}/api/queries`;
       const keyName = `fetched_osm_queries:${crypto.randomUUID()}`;
 
@@ -156,7 +163,7 @@ function createServer() {
           osmURL = `${osmURL}${redisQParam(keyName)}`;
         }
 
-        const res = await makePlaygReq<playgResponse>('GET', osmURL);
+        const res = await makePlaygReq<playgResponse>('GET', osmURL, authToken);
 
         return {
           content: [
@@ -184,12 +191,15 @@ function createServer() {
   server.registerTool(
     "run_duck_db_queries",
     duckDBToolConfig,
-    async ( { queryText, remoteQuery } ) => {
-      try {
-        const ddbUrl = `${playgBaseUrl}/api/duckdbq/run`
-        const redisKeyName = `duckdb_query_resp:${crypto.randomUUID()}`;
+    async ( { queryText, remoteQuery }, ctx ) => {
 
-        const res = await makePlaygReq<playgResponse>('POST', ddbUrl, { queryText, remoteQuery, redisKeyName })
+      const authToken = (!stdioOpts.includes(mcpType))? getAuthToken(ctx): bearerToken;
+      const ddbUrl = `${playgBaseUrl}/api/duckdbq/run`
+      const redisKeyName = `duckdb_query_resp:${crypto.randomUUID()}`;
+
+      try {
+
+        const res = await makePlaygReq<playgResponse>('POST', ddbUrl, authToken, { queryText, remoteQuery, redisKeyName })
 
         return {
           content: [
@@ -218,18 +228,20 @@ function createServer() {
   server.registerTool(
     "get_district_data",
     districtToolCfg,
-    async ( { multipleDtnames, id, dtname } ) => {
+    async ( { multipleDtnames, id, dtname }, ctx ) => {
+
+      const authToken = (!stdioOpts.includes(mcpType))? getAuthToken(ctx): bearerToken;
+      const keyName = `district_data:${crypto.randomUUID()}`;
+      let res, districtDataURL = `${playgBaseUrl}/api/district-boundary${redisQParam(keyName)}`;      
+
       try {
 
-        const keyName = `district_data:${crypto.randomUUID()}`;
-        let res, districtDataURL = `${playgBaseUrl}/api/district-boundary${redisQParam(keyName)}`;
-
         if (multipleDtnames) {
-          res = await makePlaygReq<playgResponse>('POST', districtDataURL, { multipleDtnames });
+          res = await makePlaygReq<playgResponse>('POST', districtDataURL, authToken, { multipleDtnames });
         } else if (id) {
-          res = await makePlaygReq<playgResponse>('POST', districtDataURL, { id }); 
+          res = await makePlaygReq<playgResponse>('POST', districtDataURL, authToken, { id }); 
         } else {
-          res = await makePlaygReq<playgResponse>('POST', districtDataURL, { dtname }); 
+          res = await makePlaygReq<playgResponse>('POST', districtDataURL, authToken, { dtname }); 
         }
 
         return {
@@ -271,7 +283,7 @@ async function main() {
   }
 }
 
-if (mcpType && stdioOpts.includes(mcpType)) main();
+if (stdioOpts.includes(mcpType)) main();
 
 export default handler;
 

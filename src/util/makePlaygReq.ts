@@ -1,23 +1,22 @@
-import axios from "axios";
+import axios, { AxiosRequestHeaders } from "axios";
 
 // Helper function for making playg API requests
 const userAgent = process.env.USER_AGENT ?? '';
-const bearerToken = process.env.BEARER_TOKEN ?? '';
 
-export default async function makePlaygReq<res>(req_type: string, url: string, data?: Object, params?: Object): Promise <res> {
+export default async function makePlaygReq<res>(req_type: string, url: string, authToken: string, data?: Object): Promise <res> {
+  
   const headers = {
     "User-Agent": userAgent,
     Accept: "application/json",
-    Authorization: `Bearer ${bearerToken}`
+    Authorization: `Bearer ${authToken}`
   };
-  
+
   try {
     const response = await axios.request({
       method: req_type,
       url,
       headers,
-      data,
-      params
+      data
     });
     return response as res;
   } catch (err: any) {
